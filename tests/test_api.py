@@ -35,12 +35,14 @@ def test_eval_has_baselines():
 
 def test_ai_rank_without_key_is_safe(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     assert c.post("/api/ai-rank").json()["ai"] is False
 
 
 def test_ai_blend_and_draft(monkeypatch):
     import main
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     c.post("/api/sample")
     top = c.get("/api/state").json()["leads"]
     x = next(l for l in top if l["rank"] == 1)
@@ -51,3 +53,18 @@ def test_ai_blend_and_draft(monkeypatch):
     q = c.get("/api/state").json()["queue"][0]
     c.post(f"/api/queue/{q['id']}", json={"status": "approve"})
     assert c.get("/api/state").json()["queue"][0]["draft"]
+
+
+def test_groq_path(monkeypatch):
+    import main, httpx
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    assert main.provider() == "groq"
+    ids = [l["id"] for l in c.get("/api/state").json()["leads"] if l["rank"] and l["rank"] <= 20]
+    body = "[" + ",".join('{"id":%d,"win_likelihood":80,"reason":"r"}' % i for i in ids) + "]"
+    class R:
+        status_code = 200
+        text = ""
+        def json(self): return {"choices": [{"message": {"content": "```json\n" + body + "\n```"}}]}
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: R())
+    out = c.post("/api/ai-rank").json()
+    assert out["ai"] is True and out["ranked"] == 20

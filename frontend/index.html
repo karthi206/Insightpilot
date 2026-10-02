@@ -34,7 +34,7 @@ button.pri{background:var(--fg);color:var(--inv)}button:focus-visible,input:focu
 <div class="bar">
 <button class="pri" id="demo">Load sample CRM (80 leads)</button>
 <label class="btn">Upload CSV<input id="file" type="file" accept=".csv" hidden></label>
-<button id="ai">Re-rank with Claude</button>
+<button id="ai">Re-rank with AI</button>
 <button id="tpl">Download CSV template</button>
 <button id="theme">Toggle theme</button>
 </div>
@@ -53,8 +53,8 @@ const byId=id=>leads.find(l=>l.id==id);
 
 function leadCard(x,showWhy=true){
  return `<div class="lead"><div class="top"><div class="score ${cls(x.score)}">${x.score}</div><div><b>#${x.rank} ${esc(x.name)}</b> <span class="meta">${esc(x.company)}</span><br>
- <span class="tag">${x.stage}</span><span class="tag">${x.days}d since contact</span><span class="tag">$${(x.value/1000).toFixed(0)}k</span>${x.stale?'<span class="tag">stale</span>':""}${x.ai_score!=null?`<span class="tag">rules ${x.rule_score} · Claude ${x.ai_score}</span>`:""}</div></div>
- ${showWhy?`<ul class="why">${x.factors.slice(0,4).map(f=>`<li>${esc(f.label)} <b>${f.pts>0?"+":""}${f.pts}</b></li>`).join("")}</ul>${x.ai_reason?`<p class="meta"><b>Claude:</b> ${esc(x.ai_reason)}</p>`:""}<button data-x="${x.id}">Explain in plain language</button> <span class="meta" id="ex${x.id}"></span>`:""}</div>`;
+ <span class="tag">${x.stage}</span><span class="tag">${x.days}d since contact</span><span class="tag">$${(x.value/1000).toFixed(0)}k</span>${x.stale?'<span class="tag">stale</span>':""}${x.ai_score!=null?`<span class="tag">rules ${x.rule_score} · AI ${x.ai_score}</span>`:""}</div></div>
+ ${showWhy?`<ul class="why">${x.factors.slice(0,4).map(f=>`<li>${esc(f.label)} <b>${f.pts>0?"+":""}${f.pts}</b></li>`).join("")}</ul>${x.ai_reason?`<p class="meta"><b>AI:</b> ${esc(x.ai_reason)}</p>`:""}<button data-x="${x.id}">Explain in plain language</button> <span class="meta" id="ex${x.id}"></span>`:""}</div>`;
 }
 const views={
  Ranked(){const a=leads.filter(x=>!x.dup).sort((a,b)=>a.rank-b.rank);return `<h2>Call list, best first</h2><p class="meta">Score 0–100 from deal stage, contact recency, engagement, deal value and notes. Numbers beside each reason are the points that field added.</p>`+a.map(x=>leadCard(x)).join("")},

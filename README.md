@@ -7,8 +7,8 @@ Team Quantum Force | Build Fast with AI: AI Build Challenge 2026 | PS-04: AI Dec
 Sales reps waste time deciding who to call first, and most CRM scores come with no reason. InsightPilot reads CRM lead data and tells a rep **who to contact today and why**.
 
 - **Smart lead ranking:** a 0-100 score from deal stage, contact recency, engagement, deal value and notes keywords
-- **Explainable reasoning:** every score lists the CRM fields and points behind it; Claude can rewrite them in plain language
-- **Claude re-rank:** Claude reads the free-text notes of the top 20 leads, scores them, and gives a one-line reason; blended 50/50 with the rule score
+- **Explainable reasoning:** every score lists the CRM fields and points behind it; the LLM can rewrite them in plain language
+- **AI re-rank:** the LLM reads the free-text notes of the top 20 leads, scores them, and gives a one-line reason; blended 50/50 with the rule score
 - **Cleanup:** detects duplicate leads (same company + initial + surname, or same email) and stale leads (60+ days without contact)
 - **Human-in-the-loop approval queue:** suggested actions wait for Approve/Reject; approving drafts the email (nothing is sent)
 - **Daily digest:** the top 5 leads to act on today
@@ -16,7 +16,7 @@ Sales reps waste time deciding who to call first, and most CRM scores come with 
 
 ## 🛠️ Technologies Used
 - **Backend:** Python 3.12, FastAPI, Uvicorn
-- **AI:** Anthropic Claude API (`anthropic` SDK), optional; the app works without a key using rule-based scoring
+- **AI (optional):** an LLM via Groq's free API (Llama 3.3 70B) or the Anthropic Claude API. Without a key the app falls back to rule-based scoring
 - **Frontend:** HTML, CSS, vanilla JavaScript (no build step)
 - **Data:** synthetic CRM sample generated in code, plus CSV upload
 - **Testing:** pytest, httpx
@@ -54,20 +54,20 @@ cp .env.example .env               # optional: put your ANTHROPIC_API_KEY in .en
 ## 🚀 How to Run
 ```bash
 cd backend
-# optional, enables Claude features:
-export ANTHROPIC_API_KEY=your_key_here     # Windows PowerShell: $env:ANTHROPIC_API_KEY="your_key_here"
+# optional, enables AI features (free key from console.groq.com):
+export GROQ_API_KEY=your_key_here          # or ANTHROPIC_API_KEY; Windows PowerShell: $env:GROQ_API_KEY="your_key_here"
 uvicorn main:app --reload
 ```
 Open **http://localhost:8000**.
 
 **Try it:**
 1. Click **Load sample CRM (80 leads)** and open the **Ranked** tab to see scores and reasons.
-2. Click **Re-rank with Claude** (needs the API key) to blend Claude's note-based scores in.
+2. Click **Re-rank with AI** (needs an API key) to blend the LLM's note-based scores in.
 3. Open **Approvals**, approve an action to see the drafted email.
 4. Check **Cleanup**, **Digest** and **Evaluation**.
 5. To use your own data, click **Upload CSV** (use **Download CSV template** for the columns).
 
-**Docker:** `docker build -t insightpilot . && docker run -p 8000:8000 -e ANTHROPIC_API_KEY=your_key insightpilot`
+**Docker:** `docker build -t insightpilot . && docker run -p 8000:8000 -e GROQ_API_KEY=your_key insightpilot`
 
 **Tests:** `pip install pytest httpx && pytest -q tests`
 
@@ -79,7 +79,7 @@ Open **http://localhost:8000**.
 CSV columns: `name, company, email, stage, last_contact_days, deal_value, engagement, notes, won` (won is optional, 1/0)
 
 ## 📊 Evaluation Note
-The sample outcomes are synthetic, generated from a hidden variable rather than the scorer's formula. On the sample, the rules perform about like "sort by stage", and the set is small, so differences are noise. The Claude blend has not been measured. Use real CRM outcomes for a real result.
+The sample outcomes are synthetic, generated from a hidden variable rather than the scorer's formula. On the sample, the rules perform about like "sort by stage", and the set is small, so differences are noise. The AI blend has not been measured. Use real CRM outcomes for a real result.
 
 ## 🚧 Not Implemented Yet
 Embedding-based semantic dedup, vector DB / RAG, MCP CRM connectors, persistent storage (state is in memory and resets on restart), real email sending.

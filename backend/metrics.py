@@ -19,7 +19,7 @@ def evaluate(leads, k=10):
                ("Sort by pipeline stage", lambda x: STAGE[x["stage"]]),
                ("InsightPilot rules", lambda x: x["rule_score"])]
     if any(x["ai_score"] is not None for x in lab):
-        methods.append(("InsightPilot rules + Claude", lambda x: x["score"]))
+        methods.append(("InsightPilot rules + AI", lambda x: x["score"]))
     rows = []
     for name, key in methods:
         p = p_at_k(sorted(lab, key=key, reverse=True), k)
