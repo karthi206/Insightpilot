@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>InsightPilot</title>
+<style>
+:root{--bg:#fff;--fg:#000;--mut:#5c5c5c;--line:#d9d9d9;--soft:#f3f3f3;--inv:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--fg:#fff;--mut:#a3a3a3;--line:#333;--soft:#141414;--inv:#000}}
+:root[data-theme="dark"]{--bg:#000;--fg:#fff;--mut:#a3a3a3;--line:#333;--soft:#141414;--inv:#000}
+*{box-sizing:inherit}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Helvetica Neue",Arial,sans-serif}
+.wrap{max-width:920px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:28px;letter-spacing:-.02em;margin:0}h2{font-size:18px;margin:24px 0 8px}
+.sub{color:var(--mut);margin:4px 0 16px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}
+button,.btn{font:inherit;border:1px solid var(--fg);background:var(--bg);color:var(--fg);padding:8px 14px;border-radius:6px;cursor:pointer}
+button.pri{background:var(--fg);color:var(--inv)}button:focus-visible,input:focus-visible{outline:3px solid var(--mut);outline-offset:2px}
+.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin-top:16px}
+.tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;white-space:nowrap}
+.tabs button[aria-selected=true]{border-bottom-color:var(--fg);font-weight:700}
+.lead{border:1px solid var(--line);border-radius:8px;padding:12px;margin:10px 0}
+.lead .top{display:flex;gap:12px;align-items:center}
+.score{min-width:52px;height:52px;border-radius:50%;background:var(--fg);color:var(--inv);display:grid;place-items:center;font-weight:700;font-size:18px}
+.score.mid{background:var(--mut)}.score.low{background:var(--bg);color:var(--fg);border:1px solid var(--fg)}
+.meta{color:var(--mut);font-size:13px}.tag{display:inline-block;border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:12px;margin-right:4px}
+.why{margin:8px 0 0;padding-left:18px;font-size:13px}.why li{margin:2px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--soft);border-radius:8px;padding:12px}.stat b{display:block;font-size:26px}
+.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+.done{opacity:.55}pre{white-space:pre-wrap;background:var(--soft);padding:12px;border-radius:8px;font:13px/1.5 ui-monospace,Menlo,monospace}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid var(--line);padding:6px;text-align:left}
+</style></head><body><div class="wrap">
+<h1>InsightPilot</h1>
+<p class="sub">Know who to call first. Every rank comes with a reason, every action waits for your approval.</p>
+<div class="bar">
+<button class="pri" id="demo">Load sample CRM (80 leads)</button>
+<label class="btn">Upload CSV<input id="file" type="file" accept=".csv" hidden></label>
+<button id="ai">Re-rank with Claude</button>
+<button id="tpl">Download CSV template</button>
+<button id="theme">Toggle theme</button>
+</div>
+<div class="tabs" role="tablist" id="tabs"></div>
+<div id="view"></div>
+</div>
+<script>
+let leads=[],queue=[],tab="Ranked",DG="",AI=false,EV=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const api=(p,o)=>fetch("/api"+p,o).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+const J={method:"POST",headers:{"Content-Type":"application/json"}};
+async function refresh(){const s=await api("/state");leads=s.leads;queue=s.queue;DG=s.digest;AI=s.ai;EV=s.eval;render()}
+const cls=s=>s>=60?"":s>=35?"mid":"low";
+const byId=id=>leads.find(l=>l.id==id);
+
+function leadCard(x,showWhy=true){
+ return `<div class="lead"><div class="top"><div class="score ${cls(x.score)}">${x.score}</div><div><b>#${x.rank} ${esc(x.name)}</b> <span class="meta">${esc(x.company)}</span><br>
+ <span class="tag">${x.stage}</span><span class="tag">${x.days}d since contact</span><span class="tag">$${(x.value/1000).toFixed(0)}k</span>${x.stale?'<span class="tag">stale</span>':""}${x.ai_score!=null?`<span class="tag">rules ${x.rule_score} · Claude ${x.ai_score}</span>`:""}</div></div>
+ ${showWhy?`<ul class="why">${x.factors.slice(0,4).map(f=>`<li>${esc(f.label)} <b>${f.pts>0?"+":""}${f.pts}</b></li>`).join("")}</ul>${x.ai_reason?`<p class="meta"><b>Claude:</b> ${esc(x.ai_reason)}</p>`:""}<button data-x="${x.id}">Explain in plain language</button> <span class="meta" id="ex${x.id}"></span>`:""}</div>`;
+}
+const views={
+ Ranked(){const a=leads.filter(x=>!x.dup).sort((a,b)=>a.rank-b.rank);return `<h2>Call list, best first</h2><p class="meta">Score 0–100 from deal stage, contact recency, engagement, deal value and notes. Numbers beside each reason are the points that field added.</p>`+a.map(x=>leadCard(x)).join("")},
+ Approvals(){
+  const p=queue.filter(q=>q.status=="pending").length;
+  return `<h2>Approval queue</h2><p class="meta">${p} waiting. Nothing is sent until you approve. Approving here records the decision and drafts the action.</p>`+queue.map(q=>{const x=byId(q.id);return `<div class="lead ${q.status!="pending"?"done":""}"><div class="row"><div><b>${q.type}</b><br><span class="meta">${esc(x.name)}, ${esc(x.company)} · score ${x.score}</span><br><span class="meta">${esc(q.why)}</span>${q.draft?`<pre>${esc(q.draft)}</pre>`:""}</div>
+  <div>${q.status=="pending"?`<button class="pri" data-a="approve" data-id="${q.id}">Approve</button> <button data-a="reject" data-id="${q.id}">Reject</button>`:`<b>${q.status=="approve"?"Approved":"Rejected"}</b>`}</div></div></div>`}).join("")},
+ Cleanup(){
+  const d=leads.filter(x=>x.dup),s=leads.filter(x=>x.stale&&!x.dup);
+  return `<h2>Duplicates (${d.length})</h2><p class="meta">Same company and surname as a higher-ranked record. Hidden from the call list.</p>`+(d.map(x=>`<div class="lead"><b>${esc(x.name)}</b> <span class="meta">${esc(x.company)} · duplicate of ${esc(x.dupOf)}</span></div>`).join("")||"<p>None found.</p>")+
+  `<h2>Stale leads (${s.length})</h2><p class="meta">No contact in over 60 days.</p><div class="scroll"><table><tr><th>Lead</th><th>Stage</th><th>Days</th></tr>${s.slice(0,30).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.stage}</td><td>${x.days}</td></tr>`).join("")}</table></div>`},
+ Digest(){return `<h2>Today's digest</h2><pre id="dg">${esc(digest())}</pre><button id="cp">Copy digest</button>`},
+ Evaluation(){
+  const e=EV,dec=queue.filter(q=>q.status!="pending"),ok=dec.filter(q=>q.status=="approve").length;
+  const t=e?`<div class="scroll"><table><tr><th>Method</th><th>precision@${e.k}</th><th>lift vs random</th></tr>${e.rows.map(r=>`<tr><td>${esc(r.name)}</td><td><b>${Math.round(r.p*100)}%</b></td><td>${r.lift.toFixed(1)}×</td></tr>`).join("")}</table></div><p class="meta">${e.n} labelled leads, ${Math.round(e.base*100)}% won overall. Small sample, so treat differences of one or two leads as noise. ${esc(e.note)}</p>`:"<p>Add a <b>won</b> column (1 or 0) with at least 20 leads to measure ranking quality.</p>";
+  return `<h2>Evaluation</h2>${t}<div class="stats" style="margin-top:10px"><div class="stat"><b>${dec.length?Math.round(ok/dec.length*100)+"%":"–"}</b>rep approval rate (${dec.length} decided)</div><div class="stat"><b>${leads.length}</b>leads loaded</div></div>`}
+};
+function digest(){return DG}
+function render(){
+ $("#tabs").innerHTML=Object.keys(views).map(t=>`<button role="tab" aria-selected="${t==tab}" data-t="${t}">${t}${t=="Approvals"&&leads.length?` (${queue.filter(q=>q.status=="pending").length})`:""}</button>`).join("");
+ $("#view").innerHTML=leads.length?views[tab]():`<p style="margin-top:24px">No leads yet. Load the sample CRM or upload a CSV export.</p>`;
+}
+document.addEventListener("click",e=>{
+ const b=e.target.closest("button");if(!b)return;
+ if(b.dataset.t){tab=b.dataset.t;render()}
+ else if(b.dataset.a){api("/queue/"+b.dataset.id,{...J,body:JSON.stringify({status:b.dataset.a})}).then(refresh)}
+ else if(b.dataset.x){b.disabled=true;api("/explain/"+b.dataset.x,{method:"POST"}).then(r=>{$("#ex"+b.dataset.x).textContent=(r.ai?"AI: ":"")+r.text;b.disabled=false})}
+ else if(b.id=="ai"){b.disabled=true;b.textContent="Ranking…";api("/ai-rank",{method:"POST"}).then(r=>{b.textContent=r.ai?"Re-ranked ✓ ("+r.ranked+" leads)":(r.error||"AI unavailable");b.disabled=false;return refresh()}).catch(()=>{b.textContent="Failed";b.disabled=false})}
+ else if(b.id=="demo")api("/sample",{method:"POST"}).then(refresh);
+ else if(b.id=="theme"){const r=document.documentElement,d=r.dataset.theme=="dark"||(!r.dataset.theme&&matchMedia("(prefers-color-scheme:dark)").matches);r.dataset.theme=d?"light":"dark"}
+ else if(b.id=="cp"){navigator.clipboard?.writeText($("#dg").textContent);b.textContent="Copied"}
+ else if(b.id=="tpl"){const u=URL.createObjectURL(new Blob(["name,company,email,stage,last_contact_days,deal_value,engagement,notes,won\nAsha Rao,Orbit Retail,asha@orbit.com,Proposal,3,48000,8,budget approved,1\n"],{type:"text/csv"}));const a=document.createElement("a");a.href=u;a.download="insightpilot-template.csv";a.click()}
+});
+$("#file").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const fd=new FormData();fd.append("file",f);
+ fetch("/api/upload",{method:"POST",body:fd}).then(r=>r.ok?refresh():r.json().then(j=>{$("#view").innerHTML="<p>"+esc(j.detail||"Could not read that file.")+"</p>"}))});
+refresh().catch(()=>{$("#view").innerHTML="<p>Cannot reach the API. Start the backend (see README).</p>"});
+</script></body></html>
